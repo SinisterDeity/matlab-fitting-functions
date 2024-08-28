@@ -1,0 +1,65 @@
+function [i0sGammas] = icAngleFit(obj,bool2Plot)
+%icAngleFit
+
+i0sGammas = zeros(length(obj),4);
+for i = 1:length(obj)
+    x = obj(i).angle;
+    y = obj(i).ic;
+    these = (x>-20) & (x<20);
+    x = x(these);
+    y = y(these);
+    %y=detrend(y)-min(detrend(y))+min(y);
+    [xData, yData] = prepareCurveData( x, y );
+
+    % Set up fittype and options.
+    ft = fittype( '((a*b/pi)*(((cosd(x)^2)+((b^2)*(sind(x)^2)))^-1))+((c*d/pi)*(((cosd(x)^2)+((d^2)*(sind(x)^2)))^-1))', 'independent', 'x', 'dependent', 'y' );
+    opts = fitoptions( 'Method', 'NonlinearLeastSquares' );
+    opts.DiffMaxChange = 1;
+    opts.DiffMinChange = 1e-9;
+    opts.Display = 'Off';
+    opts.Lower = [0 0 0 0];
+    opts.Upper = [Inf Inf Inf Inf];
+    opts.MaxFunEvals = 1000;
+    opts.MaxIter = 500;
+    opts.Robust = 'Bisquare';
+    opts.StartPoint = [1 1 1 1];
+    opts.TolFun = 1e-9;
+    opts.TolX = 1e-9;
+
+    % Fit model to data.
+    fitresult = fit( xData, yData, ft, opts );
+    %bounds = confint(fitresult,0.95);
+    coeffs = coeffvalues(fitresult);
+    i0sGammas(i,1) = coeffs(1);
+    i0sGammas(i,2) = coeffs(2);
+    i0sGammas(i,3) = coeffs(3);
+    i0sGammas(i,4) = coeffs(4);
+
+    % Plot fit with data.
+    if(bool2Plot)
+        hold on;
+        xlim([-20,20]);
+        angles = -20:0.1:20;
+        temp.i01 = i0sGammas(i,1);temp.gamma1 = i0sGammas(i,2);temp.i02=i0sGammas(i,3);temp.gamma2=i0sGammas(i,4);
+        ics= doubleLorentz(temp,angles);
+        scatter(obj(i).angle,obj(i).ic,[],Colors(i),'filled','HandleVisibility','off');
+        holder = sprintf(strcat('I_0 [A] =\t',num2str(round(i0sGammas(1),1)),', ',num2str(round(i0sGammas(i,3),1)),'\nGamma =\t',num2str(round(i0sGammas(i,2),3)),', ',num2str(round(i0sGammas(i,4),3))));
+        plot(angles,ics,'Color',Colors(i),'LineWidth',2,'DisplayName',holder);
+        %if(isscalar(obj))
+            temp.i01 = i0sGammas(i,1);
+            temp.gamma1 = i0sGammas(i,2);
+            ics = singleLorentz(i0sGammas(:,1),i0sGammas(i,2),angles);
+            plot(angles,ics,'k','LineWidth',2,'DisplayName','Lorentzian 1');
+            ics = singleLorentz(i0sGammas(i,3),i0sGammas(i,4),angles);
+            plot(angles,ics,'g','LineWidth',2,'DisplayName','Lorentzian 2');
+        %end
+        legend;
+        % Label axes
+        xlabel('Angle [°]','FontSize',25);
+        ylabel('I_c [A]','FontSize',25);
+        grid on;
+        title('$I_c(\theta) = \frac{I_1\Gamma_{1}}{cos^2(\theta{}) + \Gamma{}_{1}^{2}sin^2(\theta{})} + \frac{I_2\Gamma_{2}}{cos^2(\theta{}) + \Gamma{}_{2}^{2}sin^2(\theta{})}$','FontSize',25,'Interpreter','latex');
+        ax = gca;
+        ax.FontSize = 25;
+    end
+end
